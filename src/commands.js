@@ -88,21 +88,21 @@ async function runYtDlp(url, outputTemplate, onProcess) {
     const detail = (stderr + "\n" + (error?.stderr || "") + "\n" + (error?.message || "")).toLowerCase()
 
     if (detail.includes("sign in to confirm") || detail.includes("not a bot") || detail.includes("cookies")) {
-      throw new Error("YouTube bloqueó la descarga: necesita cookies de una sesión iniciada. Prueba otra plataforma o configura cookies.")
+      throw new Error("YouTube заблокировал загрузку: нужны cookies авторизованной сессии. Попробуй другую площадку или настрой cookies.")
     }
     if (detail.includes("private") || detail.includes("login") || detail.includes("sign in")) {
-      throw new Error("La plataforma requiere iniciar sesión o el vídeo es privado.")
+      throw new Error("Площадка требует входа в аккаунт или видео приватное.")
     }
     if (detail.includes("maximum file size") || detail.includes("file is larger")) {
-      throw new Error("El vídeo supera el límite de 45 МБ.")
+      throw new Error("Видео превышает лимит 45 МБ.")
     }
     if (detail.includes("duration") || detail.includes("match-filter")) {
-      throw new Error("El vídeo dura más de 15 минут o no cumple las restricciones.")
+      throw new Error("Видео длиннее 15 минут или не подходит под ограничения.")
     }
     if (error?.message?.includes("8 минут")) throw error
 
     console.error("[yt-dlp] download failed:", error?.message || error)
-    throw new Error("No se pudo descargar el vídeo. El enlace puede estar inaccesible o la plataforma puede estar bloqueando la solicitud.")
+    throw new Error("Не удалось скачать видео. Ссылка может быть недоступна или площадка блокирует запрос.")
   } finally {
     if (timer) clearTimeout(timer)
     onProcess(null)
