@@ -1,8 +1,6 @@
-import { spawn } from "node:child_process"
 import { mkdtemp, readdir, stat, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { randomUUID } from "node:crypto"
 import youtubedl from "youtube-dl-exec"
 
 const MAX_BYTES = 45 * 1024 * 1024
@@ -21,7 +19,7 @@ function isSupportedUrl(value) {
   try {
     const url = new URL(value)
     if (url.protocol !== "https:" && url.protocol !== "http:") return false
-    const host = url.hostname.toLowerCase().replace(/^www\./, "")
+    const host = url.hostname.toLowerCase().replace(/^www\\./, "")
     return SUPPORTED_HOSTS.some((domain) => host === domain || host.endsWith("." + domain))
   } catch {
     return false
@@ -47,47 +45,54 @@ function helpText() {
     "/help — помощь",
     "/id — узнать свой Telegram ID",
     "/cancel — отменить текущую загрузку",
-  ].join("\n")
+  ].join("\\n")
 }
 
 async function runYtDlp(url, outputTemplate, onProcess) {
-  const args = [
-    url,
-    "--no-playlist",
-    "--max-downloads", "1",
-    "--max-filesize", "45M",
-    "--match-filter", `duration <= ${MAX_DURATION_SECONDS}`,
-    "--format", "best[height<=720][ext=mp4]/best[height<=720]/best",
-    "--output", outputTemplate,
-    "--no-part",
-    "--no-progress",
-    "--no-warnings",
-    "--socket-timeout", "25",
-    "--retries", "1",
-    "--fragment-retries", "1",
-  ]
-
+  // youtube-dl-exec.exec принимает URL и объект флагов,
+  // а не путь к бинарнику и массив аргументов для child_process.spawn.
   return await new Promise((resolve, reject) => {
-    const child = spawn(youtubedl.exec, args, { stdio: ["ignore", "ignore", "pipe"] })
+    let child
     let stderr = ""
     let settled = false
+    let timer
 
     const finish = (error) => {
       if (settled) return
       settled = true
-      clearTimeout(timer)
+      if (timer) clearTimeout(timer)
       onProcess(null)
       if (error) reject(error)
       else resolve()
     }
 
-    const timer = setTimeout(() => {
+    try {
+      child = youtubedl.exec(url, {
+        noPlaylist: true,
+        maxDownloads: 1,
+        maxFilesize: "45M",
+        matchFilter: `duration <= ${MAX_DURATION_SECONDS}`,
+        format: "best[height<=720][ext=mp4]/best[height<=720]/best",
+        output: outputTemplate,
+        noPart: true,
+        noProgress: true,
+        noWarnings: true,
+        socketTimeout: 25,
+        retries: 1,
+        fragmentRetries: 1,
+      })
+    } catch (error) {
+      finish(error)
+      return
+    }
+
+    timer = setTimeout(() => {
       child.kill("SIGKILL")
       finish(new Error("Превышено время ожидания загрузки (8 минут)."))
     }, DOWNLOAD_TIMEOUT_MS)
 
     onProcess(child)
-    child.stderr.on("data", (chunk) => {
+    child.stderr?.on("data", (chunk) => {
       stderr = (stderr + chunk.toString()).slice(-6000)
     })
     child.on("error", (error) => finish(error))
@@ -111,13 +116,13 @@ async function runYtDlp(url, outputTemplate, onProcess) {
 export function registerCommands(bot) {
   bot.command("start", async (ctx) => {
     const suffix = isAdmin(ctx)
-      ? "\n\n✅ Доступ к скачиванию настроен."
-      : "\n\nТвой ID: " + (ctx.from?.id ?? "неизвестен") + "\nВладелец должен указать этот ID в ADMIN_USER_ID в настройках хостинга."
-    await ctx.reply("Привет! Я твой личный загрузчик видео." + suffix + "\n\n" + helpText())
+      ? "\\n\\n✅ Доступ к скачиванию настроен."
+      : "\\n\\nТвой ID: " + (ctx.from?.id ?? "неизвестен") + "\\nВладелец должен указать этот ID в ADMIN_USER_ID в настройках хостинга."
+    await ctx.reply("Привет! Я твой личный загрузчик видео." + suffix + "\\n\\n" + helpText())
   })
 
   bot.command("help", (ctx) => ctx.reply(helpText()))
-  bot.command("id", (ctx) => ctx.reply(`Твой Telegram ID: ${ctx.from?.id ?? "unknown"}\nChat ID: ${ctx.chat.id}`))
+  bot.command("id", (ctx) => ctx.reply(`Твой Telegram ID: ${ctx.from?.id ?? "unknown"}\\nChat ID: ${ctx.chat.id}`))
 
   bot.command("cancel", async (ctx) => {
     if (!isAdmin(ctx)) return ctx.reply("Бот ещё не настроен для твоего Telegram ID.")
@@ -135,7 +140,7 @@ export function registerCommands(bot) {
       return ctx.reply("Доступ пока не настроен. Отправь /id и добавь свой ID в переменную ADMIN_USER_ID в настройках FadeHost.")
     }
 
-    const match = text.match(/https?:\/\/\S+/i)
+    const match = text.match(/https?:\\/\\/\\S+/i)
     if (!match || !isSupportedUrl(match[0])) {
       return ctx.reply("Пришли ссылку на YouTube, Instagram Reels, TikTok или Pinterest.")
     }
