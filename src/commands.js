@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, stat, rm } from "node:fs/promises"
+import { mkdtemp, readdir, stat, rm, access } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import youtubedl from "youtube-dl-exec"
@@ -54,7 +54,17 @@ async function runYtDlp(url, outputTemplate, onProcess) {
   let timer
 
   try {
+    const cookiesPath = path.join(process.cwd(), "cookies.txt")
+    let cookiesAvailable = false
+    try {
+      await access(cookiesPath)
+      cookiesAvailable = true
+    } catch {
+      // Cookies are optional; continue without them when the file is absent.
+    }
+
     child = youtubedl.exec(url, {
+      ...(cookiesAvailable ? { cookies: cookiesPath } : {}),
       noPlaylist: true,
       maxDownloads: 1,
       maxFilesize: "45M",
@@ -177,7 +187,7 @@ export function registerCommands(bot) {
       }
       await ctx.api.deleteMessage(ctx.chat.id, status.message_id).catch(() => {})
     } catch (error) {
-      console.error("[download]", error)
+      console.error("[download]", error?.message || error)
       const message = error?.message || "Неизвестная ошибка."
       await ctx.api.editMessageText(ctx.chat.id, status.message_id, "❌ " + message).catch(() => {})
     } finally {
