@@ -49,68 +49,64 @@ function helpText() {
 }
 
 async function runYtDlp(url, outputTemplate, onProcess) {
-  // youtube-dl-exec.exec принимает URL и объект флагов,
-  // а не путь к бинарнику и массив аргументов для child_process.spawn.
-  return await new Promise((resolve, reject) => {
-    let child
-    let stderr = ""
-    let settled = false
-    let timer
+  let stderr = ""
+  let child
+  let timer
 
-    const finish = (error) => {
-      if (settled) return
-      settled = true
-      if (timer) clearTimeout(timer)
-      onProcess(null)
-      if (error) reject(error)
-      else resolve()
-    }
-
-    try {
-      child = youtubedl.exec(url, {
-        noPlaylist: true,
-        maxDownloads: 1,
-        maxFilesize: "45M",
-        matchFilter: `duration <= ${MAX_DURATION_SECONDS}`,
-        format: "best[height<=720][ext=mp4]/best[height<=720]/best",
-        output: outputTemplate,
-        noPart: true,
-        noProgress: true,
-        noWarnings: true,
-        socketTimeout: 25,
-        retries: 1,
-        fragmentRetries: 1,
-      })
-    } catch (error) {
-      finish(error)
-      return
-    }
-
-    timer = setTimeout(() => {
-      child.kill("SIGKILL")
-      finish(new Error("Превышено время ожидания загрузки (8 минут)."))
-    }, DOWNLOAD_TIMEOUT_MS)
+  try {
+    child = youtubedl.exec(url, {
+      noPlaylist: true,
+      maxDownloads: 1,
+      maxFilesize: "45M",
+      matchFilter: `duration <= ${MAX_DURATION_SECONDS}`,
+      format: "best[height<=720][ext=mp4]/best[height<=720]/best",
+      output: outputTemplate,
+      noPart: true,
+      noProgress: true,
+      noWarnings: true,
+      socketTimeout: 25,
+      retries: 1,
+      fragmentRetries: 1,
+    })
 
     onProcess(child)
     child.stderr?.on("data", (chunk) => {
       stderr = (stderr + chunk.toString()).slice(-6000)
     })
-    child.on("error", (error) => finish(error))
-    child.on("close", (code) => {
-      if (code === 0) return finish()
-      const detail = stderr.toLowerCase()
-      if (detail.includes("private") || detail.includes("login") || detail.includes("sign in")) {
-        return finish(new Error("Площадка требует входа в аккаунт или видео приватное."))
-      }
-      if (detail.includes("maximum file size") || detail.includes("file is larger")) {
-        return finish(new Error("Видео больше лимита 45 МБ."))
-      }
-      if (detail.includes("duration") || detail.includes("match-filter")) {
-        return finish(new Error("Видео длиннее 15 минут или не подходит под ограничения."))
-      }
-      finish(new Error("Не удалось скачать видео. Возможно, ссылка недоступна или площадка временно изменила защиту."))
+
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        child.kill("SIGKILL")
+        reject(new Error("Превышено время ожидания загрузки (8 минут)."))
+      }, DOWNLOAD_TIMEOUT_MS)
     })
-  })
+
+    // youtube-dl-exec returns a thenable child process. Await it so a failed
+    // yt-dlp run is handled here instead of becoming an unhandled rejection.
+    await Promise.race([child, timeout])
+  } catch (error) {
+    const detail = (stderr + "\n" + (error?.stderr || "") + "\n" + (error?.message || "")).toLowerCase()
+
+    if (detail.includes("sign in to confirm") || detail.includes("not a bot") || detail.includes("cookies")) {
+      throw new Error("YouTube bloqueó la descarga: necesita cookies de una sesión iniciada. Prueba otra plataforma o configura cookies.")
+    }
+    if (detail.includes("private") || detail.includes("login") || detail.includes("sign in")) {
+      throw new Error("La plataforma requiere iniciar sesión o el vídeo es privado.")
+    }
+    if (detail.includes("maximum file size") || detail.includes("file is larger")) {
+      throw new Error("El vídeo supera el límite de 45 МБ.")
+    }
+    if (detail.includes("duration") || detail.includes("match-filter")) {
+      throw new Error("El vídeo dura más de 15 минут o no cumple las restricciones.")
+    }
+    if (error?.message?.includes("8 минут")) throw error
+
+    console.error("[yt-dlp] download failed:", error?.message || error)
+    throw new Error("No se pudo descargar el vídeo. El enlace puede estar inaccesible o la plataforma puede estar bloqueando la solicitud.")
+  } finally {
+    if (timer) clearTimeout(timer)
+    onProcess(null)
+  }
 }
 
 export function registerCommands(bot) {
