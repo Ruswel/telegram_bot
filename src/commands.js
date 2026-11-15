@@ -19,7 +19,7 @@ function isSupportedUrl(value) {
   try {
     const url = new URL(value)
     if (url.protocol !== "https:" && url.protocol !== "http:") return false
-    const host = url.hostname.toLowerCase().replace(/^www\\./, "")
+    const host = url.hostname.toLowerCase().replace(/^www\./, "")
     return SUPPORTED_HOSTS.some((domain) => host === domain || host.endsWith("." + domain))
   } catch {
     return false
@@ -45,7 +45,7 @@ function helpText() {
     "/help — помощь",
     "/id — узнать свой Telegram ID",
     "/cancel — отменить текущую загрузку",
-  ].join("\\n")
+  ].join("\n")
 }
 
 async function runYtDlp(url, outputTemplate, onProcess) {
@@ -116,13 +116,13 @@ async function runYtDlp(url, outputTemplate, onProcess) {
 export function registerCommands(bot) {
   bot.command("start", async (ctx) => {
     const suffix = isAdmin(ctx)
-      ? "\\n\\n✅ Доступ к скачиванию настроен."
-      : "\\n\\nТвой ID: " + (ctx.from?.id ?? "неизвестен") + "\\nВладелец должен указать этот ID в ADMIN_USER_ID в настройках хостинга."
-    await ctx.reply("Привет! Я твой личный загрузчик видео." + suffix + "\\n\\n" + helpText())
+      ? "\n\n✅ Доступ к скачиванию настроен."
+      : "\n\nТвой ID: " + (ctx.from?.id ?? "неизвестен") + "\nВладелец должен указать этот ID в ADMIN_USER_ID в настройках хостинга."
+    await ctx.reply("Привет! Я твой личный загрузчик видео." + suffix + "\n\n" + helpText())
   })
 
   bot.command("help", (ctx) => ctx.reply(helpText()))
-  bot.command("id", (ctx) => ctx.reply(`Твой Telegram ID: ${ctx.from?.id ?? "unknown"}\\nChat ID: ${ctx.chat.id}`))
+  bot.command("id", (ctx) => ctx.reply(`Твой Telegram ID: ${ctx.from?.id ?? "unknown"}\nChat ID: ${ctx.chat.id}`))
 
   bot.command("cancel", async (ctx) => {
     if (!isAdmin(ctx)) return ctx.reply("Бот ещё не настроен для твоего Telegram ID.")
@@ -140,7 +140,7 @@ export function registerCommands(bot) {
       return ctx.reply("Доступ пока не настроен. Отправь /id и добавь свой ID в переменную ADMIN_USER_ID в настройках FadeHost.")
     }
 
-    const match = text.match(/https?:\\/\\/\\S+/i)
+    const match = text.match(/https?:\/\/\S+/i)
     if (!match || !isSupportedUrl(match[0])) {
       return ctx.reply("Пришли ссылку на YouTube, Instagram Reels, TikTok или Pinterest.")
     }
